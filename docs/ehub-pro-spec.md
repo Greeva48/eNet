@@ -22,11 +22,15 @@ controller + Thread border router + Zigbee bridge, commissioning
 and controlling its own device family.
 
 Pipeline position: smart-home-iot moves selected → specified on
-this landing. The gap-map is the NEXT pipeline stage and is NOT
-claimed by this spec — §8 is a gap-map pointer, not a completed
-gap-map. Self-check status: selected + specified, not walkable
-until the EoSim radio simulation (H4) lands — the full chain in
-§7 cannot be walked even in sim before then.
+this landing. The gap-map stage is COMPLETE as of 2026-11-15
+(SH4, this slice): §8 is now the completed gap table, every row
+grounded in evidence already in the repo or a cited first-party
+source; rows that could not be verified are marked blocked/unknown
+with the blocker named, never invented. Self-check status:
+selected + specified; H4 (EoSim Thread border-router + Matter
+commissioning sim) landed 2026-11-10, so the §7 chain can now be
+walked in sim — the Verify-stage walk itself is a later slice and
+is not claimed here.
 
 ## 1. Hardware (datasheet facts only)
 
@@ -93,9 +97,11 @@ No row in this table is `shipped` or `supported`. Every
 - On/Off + LevelControl clusters FIRST (plan §2 step 5:
   lights as the smallest certifiable surface).
 - Thermostat / doorbell / camera device control as the cast's
-  v1 device set. Cluster IDs per device are to be pinned at
-  gap-map stage — this spec names the devices, not cluster
-  IDs it has not sourced.
+  v1 device set. Cluster IDs are pinned at gap-map stage in §8
+  (§8.1): On/Off 0x0006 + Level Control 0x0008 and Thermostat
+  0x0201 are first-party-verified; the doorbell/camera device
+  types are UNKNOWN (no Camera/Doorbell device type in the CSA
+  Device Library read) and stay unpinned.
 - Hub-local visibility: an eApps hub-app queue item (not
   built by this spec; queued for the bundle's app step).
 - Hub-local analytics (v1; see §7).
@@ -148,31 +154,67 @@ Slice 3; this spec does not assume MQTT exists) → user
 visibility (hub app, eApps queue item) → hub-local analytics
 (v1; cloud analytics explicitly out of v1).
 
-Self-check status: selected + specified, not walkable until
-H4 (EoSim Thread border-router + Matter commissioning
-simulation) lands. Second self-check target note: the
+Self-check status: selected + specified. H4 landed 2026-11-10
+(EoSim `docs/thread-border-router.md`: ThreadBorderRouter +
+MatterCommissioning, three scenarios — `commission_device`,
+`mesh_map`, `commission_timeout`); the §7 chain can now be walked
+in sim. The Verify-stage walk itself is a later slice, not
+claimed here. Second self-check target note: the
 ESP32-H2 Matter end device (already in the self-check set)
 is the natural SECOND target for this domain — the end-device
 side of the same mesh — once the hub side specifies. It is
 recorded as a walk addition, NOT a second selected use case:
 one domain, one use case.
 
-## 8. Gap-map pointer (NOT a completed gap-map)
+## 8. Gap map (COMPLETE 2026-11-15, SH4)
 
-Each row is marked "gap-map stage to complete". The next
-pipeline slice (gap-map) completes this table; this spec does
-not claim it complete. Seeded only with facts already
-established in the research brief and this spec:
+Gap-map stage complete: every row below is grounded in evidence
+already in the repo or a cited first-party source, verified
+2026-11-15. Rows that could not be verified are marked
+blocked/unknown with the blocker named — nothing is invented.
+Status key: OPEN = gap known, work not started; BLOCKED = a named
+prerequisite must land first; UNKNOWN = the evidence to decide
+does not exist yet; PARTIAL = a sim or partial piece exists, the
+hardware/real piece does not.
 
-| Area | Has today | Missing | Owner repo |
-|---|---|---|---|
-| Matter stack | Nothing shipped | Full stack (gap-map stage to complete) | eos / eNet |
-| Thread stack | Nothing shipped | Full stack (gap-map stage to complete) | eos / eNet |
-| MQTT client | Codec core + Slice 2 state machine (eos #199) | Slice 3+; cloud chain (gap-map stage to complete) | eos |
-| DAC / attestation | Requirements only (§5) | Provisioning + storage design (gap-map stage to complete) | eSec + eNet |
-| Radio simulation | Nothing shipped | Thread BR + commissioning sim H4 (gap-map stage to complete) | EoSim |
-| BLE PASE bearer | Audit answered (SH1, eNet #9): declarations-only, no GATT | Real BLE backend + GATT API + nrf52 BSP (gap-map stage to complete) | eos / eNet |
-| Hub app | Queue item only | App (gap-map stage to complete) | eApps |
+| Area | Has today (evidence) | Missing | Owner repo | Status |
+|---|---|---|---|---|
+| Matter stack | Nothing shipped (home-systems plan §1; [matter-thread-note.md](matter-thread-note.md): "no stack, no port") | Full stack — Matter SDK or a subset; PASE/CASE via eSec; On/Off + LevelControl first (plan §2 step 5) | eos / eNet | OPEN — blocked on BLE prerequisite 1 + OpenThread port (see rows below) |
+| Thread stack | Nothing shipped (same sources) | OpenThread port; ESP32-H2 is the natural first target (802.15.4 + BLE 5, no Wi-Fi); BR-certification-only rule in force since Jan 1, 2026, so any border-router claim is a Thread 1.4 claim | eos / eNet | OPEN |
+| Matter application clusters (v1) | Pinned — see §8.1 | Doorbell/camera device types (UNKNOWN, see §8.1) | eNet | PARTIAL |
+| MQTT client | Codec core, slice 1 (`eos/net/src/mqtt_codec.c`, 14,106 B) + slice 2 connect/disconnect state machine (eos #212; handle table, DISCONNECTED → CONNECTING → CONNECTED → DISCONNECTING, fake-broker tests in `eos/tests/test_net.c`) | Slice 3 — publish / subscribe / loop + keep-alive (`eos/net/src/net.c`: `TODO(#199 slice 3)`; publish, subscribe, unsubscribe, loop still return -1). No open tracker: eos #199 closed 2026-10-30 after slice 2, although its design doc (`eos/docs/eos-mqtt-client-design.md` §7) says it closes when slice 3 lands. Until slice 3 lands nothing sends PINGREQ, so a broker drops an idle connection after 1.5 × keepalive_sec (MQTT-3.1.2-24). | eos | OPEN — slice 3 needs a tracker |
+| DAC / attestation | Requirements only (§5). eSec owns attestation, key management, device identity and secure storage as scope (eSec README); eos `services/crypto/` has AES + SHA-256/512 passing NIST vectors, RSA/ECC verification still stubs | Provisioning + certificate storage design — the eSec CY1 co-design, still pending (EoSim `docs/thread-border-router.md`: "Device identity provisioning is the eSec CY1 co-design, still pending") | eSec + eNet | BLOCKED on CY1 co-design |
+| Radio simulation | H4 LANDED 2026-11-10 (EoSim `docs/thread-border-router.md`; `ThreadBorderRouter` + `MatterCommissioning` in `eosim/engine/native/peripherals/thread.py`; product simulator `thread_border_router` with scenarios `commission_device`, `mesh_map`, `commission_timeout`; `tests/unit/test_thread_border_router.py`) | Real 802.15.4 radio (explicitly not simulated); PASE cryptography (the passcode comparison is a sim placeholder); DAC behavior; NFC as a second commissioning bearer (documented, not implemented) | EoSim | PARTIAL — sim exists, hardware path still open |
+| BLE PASE bearer | Audit answered (SH1, eNet #9, [ble-commissioning-audit.md](ble-commissioning-audit.md)): declarations-only, no GATT API; H4 SIMULATE decision decouples the sim from eos BLE | Real BLE backend + GATT API + nrf52 BSP in eos (prerequisite 1, still unmet) | eos / eNet | BLOCKED on prerequisite 1 |
+| Hub radio hardware | Datasheet protocol rows only (Matter 1.6.1 target, Zigbee 3.0, Z-Wave 700, BLE 5.3, Wi-Fi 6, Thread 1.4 target); hub connectivity lists GbE + USB only | No named 802.15.4 / Zigbee / Z-Wave radio silicon or module on the hub — which radio carries Thread/Zigbee is unspecified | eCAD + eNet | UNKNOWN — blocker: eCAD datasheet radio-module line (or a USB-radio decision) |
+| Zigbee bridge | Hub/coordinator first mode chosen (§2); the bridge pattern exists for other protocols ([device-bridges.md](device-bridges.md): mcp2serial, mcp2mqtt, modbus) | No Zigbee coordinator/bridge implementation; native stack explicitly undecided; closing evidence (a named deployment the hub story cannot serve) does not exist | eNet | OPEN |
+| Z-Wave | Datasheet row + [home-systems-plan.md](home-systems-plan.md) §3.3 research gap | Study in the shape of the LoRaWAN study (licensing + silicon + stack read from first-party sources); sequenced after plan §2 steps 1–2 | eNet | UNKNOWN — research gap |
+| Hub app | Queue item only (§4, §7); no tracker found (eApps title search "hub": 0 hits), no code | The app itself | eApps | OPEN — blocked on the Matter lane (nothing to show yet) |
+| Voice (H6) | Scoping done 2026-11-13 (eVera `docs/hub-voice-split-scoping.md`, eVera #87 / PR #86); local pipeline read (webrtcvad VAD, faster-whisper STT, "hey vera" wake word, pyttsx3 TTS); HA 2026.11 two-way audio is camera/doorbell talk-back only, not a voice-command path (§9) | Intent → Matter-cluster mapping (does not exist); capability-scoping per eSec Controls 7–9 | eVera + eNet | OPEN |
+
+### 8.1 Matter application clusters — pinned IDs (first-party)
+
+Cluster IDs pinned from the CSA Matter Device Library
+Specification R1.1, document 22-27351 (Board-accepted May 17,
+2023; csa-iot.org). The IDs are ZCL-heredity values stable across
+Matter revisions; the citation is the 1.1 Device Library because
+it is the CSA document read first-party for this slice — a
+1.6.1 Device Library re-read is still open for the
+doorbell/camera question below.
+
+| Device / surface | Device type | Clusters (server, mandatory unless noted) |
+|---|---|---|
+| On/Off Light (the plan §2 step 5 smallest certifiable surface) | — | On/Off 0x0006 (M); Level Control 0x0008 (O) — §4.1.4 |
+| eThermostat | Thermostat 0x0301 | Thermostat 0x0201 (M) — §9.2.4 |
+| eSpeaker-AI (volume only) | Speaker 0x0022 | Volume control via the Speaker endpoint — §10.4 |
+
+UNKNOWN — eDoorbell / eCamera-Home: no Camera or Doorbell
+device type exists in the CSA Device Library R1.1 read for this
+slice (text search of the document returns no match for either).
+Their Matter device types and clusters stay UNPINNED. Blocker:
+read the Matter 1.6.1 Device Library for camera/doorbell device
+types before pinning anything for the doorbell or the camera. Do
+not map them to Door Lock or any other device type by analogy.
 
 ## 9. Voice pointer (H6, scoping done 2026-11-13 — one section)
 
